@@ -13,8 +13,8 @@ import io.ktor.client.features.logging.*
 import io.ktor.client.features.websocket.*
 import io.ktor.util.*
 import org.koin.dsl.module
+import util.AppLog
 import util.KTOR_LOGGING
-import java.security.Provider
 import kotlinx.serialization.json.Json as KotlinJson
 
 @InternalAPI
@@ -40,6 +40,7 @@ val AppModule = module {
         }
     }
 
+    single { AppLog() }
     single { Authentication() }
     single { Service() }
     single { ServiceHuobi() }

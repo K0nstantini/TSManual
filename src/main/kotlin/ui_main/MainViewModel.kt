@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
+import util.AppLog
 import util.MainParams.DIFF_TRIGGER_LIMIT
 import util.ResultOf
 import util.opposite
@@ -23,6 +24,7 @@ import util.opposite
 @InternalAPI
 class MainViewModel : KoinComponent {
 
+    private val log: AppLog = get()
     private val service: Service = get()
     private val scope = CoroutineScope(Dispatchers.Default)
     private val pendingActions = MutableSharedFlow<MainActions>()
@@ -31,6 +33,8 @@ class MainViewModel : KoinComponent {
     private val observeFills: ObserveFills = get()
 
     private var jobs = mutableListOf<Job>()
+
+    private val clearLogOnStart = MutableStateFlow(true)
 
     private val start = MutableStateFlow(false)
     private val marketName = MutableStateFlow("")
@@ -43,9 +47,17 @@ class MainViewModel : KoinComponent {
 
     private var currentTick: Ticker? = null
 
-    val state = combine(start, marketName, orderSide) { start, marketName, side ->
+    val state = combine(
+        start,
+        log.observe,
+        clearLogOnStart,
+        marketName,
+        orderSide
+    ) { start, log, clear, marketName, side ->
         MainViewState(
             start = start,
+            log = log,
+            clearLogOnStart = clear,
             market = marketName,
             orderSide = side
         )
@@ -59,6 +71,7 @@ class MainViewModel : KoinComponent {
                     MainActions.PlaceOrder -> placeOrder()
                     is MainActions.ChangeMarket -> changeMarket(action.market)
                     is MainActions.ChangeOrderSide -> changeOrderSide(action.side)
+                    is MainActions.ClearLogOnStart -> clearLogOnStart(action.clear)
                 }
             }
         }
@@ -67,7 +80,11 @@ class MainViewModel : KoinComponent {
     /** ======================================== FUNCTIONS ===================================================== */
 
     private suspend fun start() {
-        getMarket()
+        if (clearLogOnStart.value) {
+            log.clear()
+        }
+        log.add("Start")
+        /*getMarket()
         start.value = !start.value
 
         if (start.value) {
@@ -76,7 +93,7 @@ class MainViewModel : KoinComponent {
         } else {
             jobs.forEach { it.cancel() }
             jobs.clear()
-        }
+        }*/
     }
 
     private fun changeMarket(marketName: String) {
@@ -85,6 +102,10 @@ class MainViewModel : KoinComponent {
 
     private fun changeOrderSide(side: OrderSide) {
         orderSide.value = side
+    }
+
+    private fun clearLogOnStart(clear: Boolean) {
+        clearLogOnStart.value = clear
     }
 
     private suspend fun getMarket() {
