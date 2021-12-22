@@ -8,6 +8,8 @@ import data.remote.response.Ticker
 import domain.observes.ObserveFills
 import domain.observes.ObserveTicks
 import enums.OrderSide
+import enums.OrderTypeConfiguration
+import enums.OrderTypeTrigger
 import io.ktor.util.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -37,8 +39,9 @@ class MainViewModel : KoinComponent {
     private val clearLogOnStart = MutableStateFlow(true)
 
     private val start = MutableStateFlow(false)
-    private val marketName = MutableStateFlow("")
+//    private val marketName = MutableStateFlow("ADA-PERP")
     private val orderSide = MutableStateFlow(OrderSide.BUY)
+    private val orderConfigutarion = MutableStateFlow(OrderConfiguration.empty)
 
     private val _market: MutableStateFlow<Market?> = MutableStateFlow(null)
     private val market: Market get() = _market.value ?: throw Exception("Market is null")
@@ -51,15 +54,13 @@ class MainViewModel : KoinComponent {
         start,
         log.observe,
         clearLogOnStart,
-        marketName,
-        orderSide
-    ) { start, log, clear, marketName, side ->
+        orderConfigutarion
+    ) { start, log, clear, order ->
         MainViewState(
             start = start,
             log = log,
             clearLogOnStart = clear,
-            market = marketName,
-            orderSide = side
+            order = order,
         )
     }
 
@@ -70,7 +71,11 @@ class MainViewModel : KoinComponent {
                     MainActions.Start -> start()
                     MainActions.PlaceOrder -> placeOrder()
                     is MainActions.ChangeMarket -> changeMarket(action.market)
-                    is MainActions.ChangeOrderSide -> changeOrderSide(action.side)
+                    is MainActions.ChangePrice -> changePrice(action.price)
+                    is MainActions.ChangeSize -> changeSize(action.size)
+                    is MainActions.ChangeSide -> changeOrderSide(action.side)
+                    is MainActions.ChangeType -> changeOrderType(action.type)
+                    is MainActions.ChangeTypeTrigger -> changeOrderTypeTrigger(action.type)
                     is MainActions.ClearLogOnStart -> clearLogOnStart(action.clear)
                 }
             }
@@ -83,11 +88,10 @@ class MainViewModel : KoinComponent {
         if (clearLogOnStart.value) {
             log.clear()
         }
-        log.add("Start")
-        /*getMarket()
+        getMarket()
         start.value = !start.value
 
-        if (start.value) {
+        /*if (start.value) {
             jobs.add(scope.launch { observeFills() })
             jobs.add(scope.launch { observeTicks() })
         } else {
@@ -96,12 +100,30 @@ class MainViewModel : KoinComponent {
         }*/
     }
 
-    private fun changeMarket(marketName: String) {
-        this.marketName.value = marketName
+    private fun changeMarket(market: String) {
+        orderConfigutarion.value = orderConfigutarion.value.copy(market = market)
+    }
+
+    private fun changePrice(strPrice: String) {
+        val price = strPrice.toDoubleOrNull() ?: return
+        orderConfigutarion.value = orderConfigutarion.value.copy(price = price)
+    }
+
+    private fun changeSize(strSize: String) {
+        val size = strSize.toDoubleOrNull() ?: return
+        orderConfigutarion.value = orderConfigutarion.value.copy(size = size)
     }
 
     private fun changeOrderSide(side: OrderSide) {
-        orderSide.value = side
+        orderConfigutarion.value = orderConfigutarion.value.copy(side = side)
+    }
+
+    private fun changeOrderType(type: OrderTypeConfiguration) {
+        orderConfigutarion.value = orderConfigutarion.value.copy(type = type)
+    }
+
+    private fun changeOrderTypeTrigger(type: OrderTypeTrigger) {
+        orderConfigutarion.value = orderConfigutarion.value.copy(typeTrigger = type)
     }
 
     private fun clearLogOnStart(clear: Boolean) {
@@ -109,9 +131,15 @@ class MainViewModel : KoinComponent {
     }
 
     private suspend fun getMarket() {
-        when (val result = service.getMarket(marketName.value)) {
-            is ResultOf.Success -> _market.value = result.value
-            is ResultOf.Failure -> throw Exception("Can't get market ${result.message}")
+        when (val result = service.getMarket(orderConfigutarion.value.market)) {
+            is ResultOf.Success -> {
+                _market.value = result.value
+                log.add("Observe market: ${market.name}")
+            }
+            is ResultOf.Failure -> {
+                log.addError("Can't get market: ${orderConfigutarion.value.market}")
+                throw Exception("Can't get market ${result.message}")
+            }
         }
     }
 
